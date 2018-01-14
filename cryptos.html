@@ -1,157 +1,229 @@
 <html>
    <head>
          <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
-         
          <script src="https://code.highcharts.com/highcharts.js"></script>
    </head>
    <body>
-   <table id="table"></table>
-   <script>
-      var apiUrl = 'https://min-api.cryptocompare.com/data/';
+      <table>
+         <tr>
+            <th>Name</th>
+            <th>Price</th>
+            <th>% 1d</th>
+            <th>% 7d</th>
+            <th>60 day trend</th>
+         </tr>
+      </table>
+      <script>
+         var API_URL = 'https://min-api.cryptocompare.com/data/';
 
-      function filterObject(obj, filter) {
-         var ret = {};
-         for(var p in obj) {
-            if (obj.hasOwnProperty(p)) {
-               if (filter(obj[p])) {
-                  ret[p] = obj[p];
+         /**
+          * Filters an object based on the filter function provided
+          * 
+          * @param {object} obj
+          * @param {function} filter 
+          * @returns filtered object
+         */
+         function filterObject(obj, filter) {
+            var ret = {};
+            for(var p in obj) {
+               if (obj.hasOwnProperty(p)) {
+                  if (filter(obj[p])) {
+                     ret[p] = obj[p];
+                  }
                }
             }
+            return ret;
          }
-         return ret;
-      }
-      function getData(key, callback) {
-         $.ajax({
-            type: "GET",
-            url: apiUrl + 'histoday',
-            data: {
-               fsym: key,
-               tsym: 'USD',
-               limit: 60,
-            },
-            // dataType: 'jsonp',
-            // headers: {  'Access-Control-Allow-Origin': 'htt://site allowed to access' },
-            success: function( result ) {
-               // console.log(result);
-               var d = result.Data.map(function(r) {
-                  return [r.time, r.open];
-               });
-               callback(d, key);
-            },
-            error: function(result) {
-               console.log(result);
-            }
-         });
-      }
-      // var apiUrl = 'https://api.cryptonator.com/api/ticker/btc-usd';
-      function getCoins() {
-         $.ajax({
-            type: "GET",
-            url: apiUrl + 'all/coinlist',
 
-            // dataType: 'jsonp',
-            // headers: {  'Access-Control-Allow-Origin': 'htt://site allowed to access' },
-            success: function( result ) {
-               var data = result.Data;
-               // console.log(result);
-               var filtered = filterObject(data, function(a) { return a.SortOrder < 10; });
-               // console.log(filtered);
-               var html = '';
-               var $table = $('#table');
-               var i = 0;
-               for(var f in filtered) {
-                  // makeChart();
-                  getData(f, function(data, key) {
-                     var s = filtered[key];
-                     // console.log(f);
-                 
-                     var $row = $('<tr>').appendTo($table);
-                        var l = data.length;
-                     var price = data[l - 1][1];
-                     var yesterday = data[l - 2][1];
-                     var lastWeek = data[l - 7][1];
-                     console.log(key, price, yesterday, lastWeek);
-                     // console.log(s.TotalCoinSupply, data.reverse()[0][1])
-                     $row.html('<td>' + s.CoinName + '</td>' +
-                     '<td>' + price + '</td>' + 
-                     '<td>' + (((price / yesterday) - 1) * 100).toFixed(2) + '</td>' +
-                     '<td>' + (((price / lastWeek) - 1) * 100).toFixed(2) + '</td>' + 
-                     '<td><img src="https://www.cryptocompare.com' + s.ImageUrl + '"/></td>');
-                     var $container = $('<div>', { id: f, class: 'chart' }); // .appendTo($row);
-                     // console.log(data, $container);
-                     $row.append( $('<td>').append($container ));
-                     makeChart($container, data, i++, key);
-
+         /**
+          * Gets last 60 prices and the timestamps for the currency key provided
+          * 
+          * @param {string} key 
+          * @param {function} callback 
+         */
+         function getData(key, callback) {
+            $.ajax({
+               type: "GET",
+               url: API_URL + 'histoday',
+               data: {
+                  fsym: key,
+                  tsym: 'USD',
+                  limit: 60,
+               },
+               success: function( result ) {
+                  var parsed = result.Data.map(function(r) {
+                     return [r.time * 1000, r.open];
                   });
+                  callback(parsed, key);
+               },
+               error: function(result) {
+                  console.log(result);
                }
+            });
+         }
 
-            },
-            error: function(result) {
-               console.log(result);
-            }
-         });
+         /**
+          * Gets the biggest 10 coins and its data, and then populate the table.
+          */
+         function getCoins() {
+            $.ajax({
+               type: "GET",
+               url: API_URL + 'all/coinlist',
+               success: function(result) {
+                  var filteredCurrencies = filterObject(result.Data, function(a) { return a.SortOrder < 10; });
 
-      }
+                  var $table = $('table');
+                  var i = 0;
+                  for(var currencyKey in filteredCurrencies) {
+                     getData(currencyKey, function(data, key) {
+                        var currency = filteredCurrencies[key];
+                        
+                        var $row = $('<tr>').appendTo($table);
+                        
+                        var l = data.length;
+                        var price = data[l - 1][1];
+                        var yesterday = data[l - 2][1];
+                        var lastWeek = data[l - 7][1];
+                        
+                        var dayChange = ((price / yesterday) - 1) * 100;
+                        var weekChange = ((price / lastWeek) - 1) * 100;
 
-      function makeChart($container, data, i, label) {
-         console.log(data);
-         // console.log(data);
-         var myChart = new Highcharts.chart({
-            chart: {
-               renderTo: $container[0],
-            },
-            series: [{
-               data: data,
-               colorIndex: i,
-               name: label,
-            }]
-         });
-      }
-   // self executing function here
-   $(function() {
-      Highcharts.setOptions({
-         chart: {
-            zoomType: 'x',
-            type: 'spline',
-         },
-         credits: {
-            enabled: false,
-         },
-         legend: {
-            enabled: false,
-         },
-         title: {
-            text: null,
-         },
-         xAxis: {
-            type: 'datetime',
-            visible: false
-         },
-         yAxis: {
-            visible: false,
-            
-         },
-         plotOptions: {
-            series: {
-               marker: {
+                        $row.html(`
+                           <td>
+                              <div class="image-container">
+                                 <img src="https://www.cryptocompare.com` + currency.ImageUrl + '"/>' +
+                                 currency.CoinName + 
+                              `</div>
+                           </td>
+                           <td>$` + price.toFixed(2) + `</td>
+                           <td class="` + (dayChange < 0 ? 'red' : 'green') + '">' + dayChange.toFixed(2) + `%</td>
+                           <td class="` + (weekChange < 0 ? 'red' : 'green') + '">' + weekChange.toFixed(2) + '%</td>'
+                        );
+                        var $chart = $('<div>', { id: key, class: 'chart' });
+                        $row.append($('<td>').append($chart));
+                        createChart($chart[0], data, i++, key);
+                     });
+                  }
+               },
+               error: function(result) {
+                  console.log(result);
+               }
+            });
+         }
+
+         /**
+          * Populates a chart
+          * 
+          * @param {element} $node 
+          * @param {array} data 
+          * @param {number} colorIndex 
+          * @param {string} label 
+         */
+         function createChart($node, data, colorIndex, label) {
+            var myChart = new Highcharts.chart({
+               chart: {
+                  renderTo: $node,
+               },
+               series: [{
+                  data: data,
+                  colorIndex: colorIndex,
+                  name: label,
+               }]
+            });
+         }
+
+         // after page load
+         $(function() {
+            // Highcarts global options
+            Highcharts.setOptions({
+               chart: {
+                  backgroundColor: 'transparent',
+                  spacing: [5,0,5,0],
+                  type: 'spline',
+                  width: 300,
+                  zoomType: 'x',
+               },
+               credits: {
                   enabled: false,
                },
-            },
-         },
-      });
-      getCoins();
-   });
-      // your page initialization code here
-      // the DOM will be available here
-     
-   </script>
-   <style>
-      body {
-         font-family: Arial, Helvetica, sans-serif;
-      }
-      img, .chart {
-         height: 100px;
-      }
-   </style>
+               legend: {
+                  enabled: false,
+               },
+               plotOptions: {
+                  series: {
+                     marker: {
+                        enabled: false,
+                     },
+                  },
+               },
+               title: {
+                  text: null,
+               },
+               tooltip: {
+                  hideDelay: 0,
+                  valuePrefix: '$',
+               },
+               xAxis: {
+                  type: 'datetime',
+                  visible: false
+               },
+               yAxis: {
+                  visible: false,
+               },
+            });
+
+            getCoins();
+         });
+      </script>
+      <style>
+         body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+         }
+         .image-container {
+            align-items: center;
+            display: flex;
+         }
+         .chart {
+            height: 80px;
+         }
+         img {
+            height: 24px;
+            margin-right: 12px;
+         }
+         table {
+            background-color: #f9f9f9;
+            border-collapse: collapse;
+            font-size: 14px;
+            margin: 0 auto;
+         }
+         td:nth-child(2) {
+            font-weight: bold;
+         }
+         td {
+            padding: 0 12px;
+         }
+         .red {
+            color: #900;
+         }
+         .green {
+            color: #090;
+         }
+         th {
+            background-color: #444;
+            color: #fff;
+            font-weight: normal;
+            padding: 12px;
+         }
+         th {
+            text-align: left;
+         }
+         td:nth-child(2), td:nth-child(3), td:nth-child(4), th:nth-child(2), th:nth-child(3), th:nth-child(4) {
+            text-align: right;
+         }
+         tr {
+            border-bottom: 1px solid #eee;
+         }
+      </style>
    </body>
-   </html>
+</html>
